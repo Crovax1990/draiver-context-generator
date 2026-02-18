@@ -1,81 +1,125 @@
-# Draiver Context Generator
+# 🚀 Draiver Context Generator
 
-A minimal local Python CLI that converts university lecture documents (PDF, DOCX, PPTX, TXT) into structured Markdown context files, ready to be used as a knowledge base for an AI agent.
+Un potente convertitore locale basato su **Docling (IBM)** per trasformare dispense universitarie e documenti (PDF, DOCX, PPTX, TXT) in basi di conoscenza Markdown strutturate, pronte per essere consumate da agenti AI o sistemi RAG.
 
-## How it works
+---
 
-```
-input/ (your documents)
-    └── dispensa_fisica.pdf
-    └── lezione_01.docx
-    └── slide_intro.pptx
-         ↓  Docling parsing
-output/ (generated Markdown)
-    └── dispensa_fisica.md
-    └── lezione_01.md
-    └── slide_intro.md
-```
+## ✨ Caratteristiche Principali
 
-## Setup
+- **📄 Parsing Avanzato**: Sfrutta la tecnologia Docling per estrarre non solo testo, ma anche **tabelle, liste e intestazioni** mantenendo la gerarchia del documento.
+- **🖼️ Estrazione Immagini**: Recupera automaticamente tutte le immagini dai documenti e le organizza in una cartella dedicata.
+- **⚡ Elaborazione Parallela**: Supporto multi-threading (configurabile) per elaborare decine di documenti in pochi secondi sfruttando tutta la CPU.
+- **📊 Audit Report**: Genera un report JSON dettagliato con lo stato di ogni documento, errori catturati, numero di pagine e warning tecnici.
+- **🔄 Deduplicazione**: Script incluso per rimuovere immagini identiche caricate più volte negli stessi documenti.
+- **📁 Flessibilità Output**: Modalità "per documento" (1:1) o "single" (un unico file aggregato con TOC).
+
+---
+
+## 🛠️ Setup
 
 ```bash
-# 1. Create and activate a virtual environment
+# 1. Crea e attiva un virtual environment
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 # source .venv/bin/activate   # macOS/Linux
 
-# 2. Install dependencies
+# 2. Installa le dipendenze
 pip install -r requirements.txt
 
-# 3. Create the input folder and add your documents
+# 3. Prepara i documenti
 mkdir input
-# copy your PDF, DOCX, PPTX, TXT files into input/
+# Copia i tuoi file PDF, DOCX, PPTX, TXT nella cartella input/
 ```
 
-## Usage
+---
+
+## 🚀 Utilizzo
+
+### Pipeline Principale (`main.py`)
+
+Il comando principale esegue l'ingestion, la conversione e la generazione dell'output.
 
 ```bash
-# Default: one .md file per document (recommended)
+# Esecuzione standard (1:1 markdown, 2 thread paralleli)
 python main.py
 
-# Single aggregated output file
+# Aggrega tutto in un unico file context.md
 python main.py --mode single
 
-# Custom paths
-python main.py --input ./my_docs --output ./my_output
+# Aumenta le performance (es. 4 thread)
+python main.py --threads 4
 
-# Help
-python main.py --help
+# Disabilita l'estrazione immagini
+python main.py --no-images
+
+# Personalizza i percorsi
+python main.py --input ./my_docs --output ./my_knowledge_base
 ```
 
-## Output format
+### Script di Deduplicazione Immagini
 
-Each generated `.md` file includes:
-- **YAML frontmatter** with title, source filename, page count, and generation timestamp
-- **Full Markdown content** extracted by Docling (headings, paragraphs, tables, lists preserved)
+Docling spesso estrae la stessa immagine se questa compare più volte in un documento (o tra più documenti). Usa questo script per pulire la cartella di output:
 
-In `--mode single`, a single `context.md` is produced with a Table of Contents linking all documents.
+```bash
+# Solo anteprima (dry-run)
+python scripts/deduplicate_images.py --dry-run
 
-## Supported formats
-
-| Format | Extension |
-|--------|-----------|
-| PDF | `.pdf` |
-| Word | `.docx` |
-| PowerPoint | `.pptx` |
-| Plain text | `.txt` |
-
-## Project structure
-
+# Esecuzione effettiva (sposta i duplicati in output/images/duplicates)
+python scripts/deduplicate_images.py
 ```
+
+---
+
+## 📜 Formato di Output
+
+Ogni file Markdown generato include:
+- **YAML Frontmatter**: Metadati (titolo, file sorgente, dimensioni, conteggio pagine/immagini, timestamp).
+- **Contenuto Markdown**: Testo strutturato con supporto a tabelle e blocchi di codice.
+- **Immagini**: Salvate in `output/images/` con naming coerente `<documento>_img_xxx.png`.
+
+---
+
+## 📊 Audit & Rapporti
+
+Al termine di ogni esecuzione, troverai `output/audit_report.json`. Questo file è fondamentale per diagnosticare problemi su documenti complessi:
+- **Status**: `success`, `partial` (estratto con warning) o `failed`.
+- **Warnings**: Include messaggi di basso livello (es. errori OCR su singole pagine o `std::bad_alloc` su file giganti).
+- **Stats**: Statistiche aggregate sull'intera sessione di elaborazione.
+
+---
+
+## 🏗️ Struttura del Progetto
+
+```text
 draiver-context-generator/
-├── input/              # Place your source documents here (gitignored)
-├── output/             # Generated Markdown files (gitignored)
+├── input/                  # Sorgenti (PDF, DOCX, PPTX, TXT)
+├── output/                 # Markdown generati
+│   ├── images/             # Immagini estratte
+│   │   └── duplicates/     # Immagini rimosse dallo script deduplicator
+│   └── audit_report.json   # Report dettagliato dell'ultima esecuzione
+├── scripts/
+│   └── deduplicate_images.py # Utility per la pulizia immagini
 ├── src/
-│   ├── ingestion.py    # Scans input folder
-│   ├── extraction.py   # Docling-based conversion
-│   └── output_writer.py# Markdown file generation
-├── main.py             # CLI entry point
-├── config.py           # Configuration
-└── requirements.txt
+│   ├── ingestion.py        # Scansione filesystem
+│   ├── extraction.py       # Motore Docling + Parallelismo + Warning capture
+│   ├── audit.py            # Logica di auditing thread-safe
+│   └── output_writer.py    # Formattazione Markdown & Frontmatter
+├── main.py                 # CLI principale
+├── config.py               # Parametri globali e default
+└── requirements.txt        # Dipendenze (docling, pillow, etc.)
 ```
+
+---
+
+## 🛡️ Supporto Formati
+
+| Formato | Estensione | Note |
+|:---|:---:|:---|
+| **PDF** | `.pdf` | Supporto OCR integrale tramite Docling |
+| **Word** | `.docx` | Preserva tabelle e formattazione |
+| **PowerPoint** | `.pptx` | Ottimo per slides e diagrammi |
+| **Text** | `.txt` | Conversione diretta |
+
+---
+
+*Powered by [Docling](https://github.com/DS4SD/docling)*
