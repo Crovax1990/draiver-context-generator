@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+input/
+output/
+*.pptx
+*.log
+*.cache
+
+# LLM / vector store caches
+.chroma/
+.faiss/
+*.pkl
+*.index
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# MCP secrets (keep server-mcp.json out of git if it has keys)
+server-mcp.json
