@@ -16,6 +16,9 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt"}
 # "single"       → one aggregated context.md file
 DEFAULT_OUTPUT_MODE = "per_document"
 
+# ── Parallelism ──────────────────────────────────────────────────────────────
+DEFAULT_THREADS = 2
+
 # ── Markdown output options ───────────────────────────────────────────────────
 # Include YAML frontmatter at the top of each output file
 INCLUDE_FRONTMATTER = True

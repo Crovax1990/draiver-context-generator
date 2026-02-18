@@ -7,6 +7,8 @@ Captures per-document warnings, extracts images, and feeds the audit log.
 import io
 import logging
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from docling.document_converter import DocumentConverter
@@ -47,7 +49,8 @@ def extract_context(
 
     # Capture warnings emitted by Docling during conversion
     warnings_captured: list[str] = []
-    handler = _WarningCapture(file_path.name, warnings_captured)
+    thread_name = threading.current_thread().name
+    handler = _WarningCapture(file_path.name, warnings_captured, thread_name)
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
 
@@ -73,7 +76,7 @@ def extract_context(
         }
 
     except Exception as exc:  # noqa: BLE001
-        logger.error("Failed to process '%s': %s", file_path.name, exc)
+        logger.error("Failed to process '%s' on thread '%s': %s", file_path.name, thread_name, exc)
         return None
     finally:
         root_logger.removeHandler(handler)
@@ -83,14 +86,16 @@ def extract_all(
     file_paths: list[Path],
     audit: AuditLog,
     images_dir: Path | None = None,
+    num_threads: int = 1,
 ) -> tuple[list[dict], list[str]]:
     """
-    Runs extract_context on every path and records results in the audit log.
+    Runs extract_context on every path in parallel and records results in the audit log.
 
     Args:
-        file_paths: List of document paths from the ingestion step.
-        audit:      AuditLog instance to populate.
-        images_dir: Directory to save extracted images (shared across docs).
+        file_paths:  List of document paths from the ingestion step.
+        audit:       AuditLog instance to populate.
+        images_dir:  Directory to save extracted images (shared across docs).
+        num_threads: Number of parallel worker threads to use.
 
     Returns:
         A tuple (successful_docs, failed_filenames).
@@ -98,12 +103,11 @@ def extract_all(
     successful: list[dict] = []
     failed: list[str] = []
 
-    for path in file_paths:
+    def _worker(path: Path):
         file_size_mb = path.stat().st_size / (1024 * 1024)
         result = extract_context(path, images_dir=images_dir)
 
         if result is not None:
-            successful.append(result)
             # Decide status: "partial" if there were warnings
             status = "partial" if result["warnings"] else "success"
             audit.add_entry(
@@ -114,14 +118,26 @@ def extract_all(
                 warnings=result["warnings"],
                 file_size_mb=file_size_mb,
             )
+            return result
         else:
-            failed.append(path.name)
             audit.add_entry(
                 path.name,
                 status="failed",
                 error=f"Docling conversion failed (see console logs)",
                 file_size_mb=file_size_mb,
             )
+            return path.name
+
+    logger.info("Starting extraction with pool size: %d", num_threads)
+    
+    with ThreadPoolExecutor(max_workers=num_threads, thread_name_prefix="worker") as executor:
+        results = list(executor.map(_worker, file_paths))
+
+    for res in results:
+        if isinstance(res, dict):
+            successful.append(res)
+        else:
+            failed.append(res)
 
     logger.info(
         "Extraction complete: %d succeeded, %d failed.",
@@ -184,15 +200,18 @@ class _WarningCapture(logging.Handler):
     # Docling logger prefixes we want to capture
     _DOCLING_PREFIXES = ("docling.",)
 
-    def __init__(self, source_file: str, target_list: list[str]) -> None:
+    def __init__(self, source_file: str, target_list: list[str], thread_name: str) -> None:
         super().__init__(level=logging.WARNING)
         self._source_file = source_file
         self._target_list = target_list
+        self._thread_name = thread_name
 
     def emit(self, record: logging.LogRecord) -> None:
-        if any(record.name.startswith(p) for p in self._DOCLING_PREFIXES):
-            msg = f"[{record.levelname}] {record.name}: {record.getMessage()}"
-            self._target_list.append(msg)
+        # Only capture logs emitted by the same thread that created this handler
+        if threading.current_thread().name == self._thread_name:
+            if any(record.name.startswith(p) for p in self._DOCLING_PREFIXES):
+                msg = f"[{record.levelname}] {record.name}: {record.getMessage()}"
+                self._target_list.append(msg)
 
 
 # ── Other helpers ─────────────────────────────────────────────────────────────

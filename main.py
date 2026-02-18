@@ -62,6 +62,12 @@ def _parse_args() -> argparse.Namespace:
         help=f"Output folder (default: {config.OUTPUT_DIR})",
     )
     parser.add_argument(
+        "--threads",
+        type=int,
+        default=config.DEFAULT_THREADS,
+        help=f"Number of parallel threads (default: {config.DEFAULT_THREADS})",
+    )
+    parser.add_argument(
         "--no-images",
         action="store_true",
         default=False,
@@ -78,7 +84,8 @@ def main() -> int:
     logger.info("=== Draiver Context Generator ===")
     logger.info("Input : %s", args.input)
     logger.info("Output: %s", args.output)
-    logger.info("Mode  : %s", args.mode)
+    logger.info("Mode   : %s", args.mode)
+    logger.info("Threads: %d", args.threads)
 
     # Prepare output subdirectories
     images_dir = None
@@ -101,7 +108,12 @@ def main() -> int:
         return 0
 
     # ── Step 2: Extraction ────────────────────────────────────────────────────
-    docs, failed = extract_all(file_paths, audit=audit, images_dir=images_dir)
+    docs, failed = extract_all(
+        file_paths, 
+        audit=audit, 
+        images_dir=images_dir,
+        num_threads=args.threads
+    )
 
     # ── Step 3: Output ────────────────────────────────────────────────────────
     if docs:

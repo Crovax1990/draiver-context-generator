@@ -6,6 +6,7 @@ per-document status, warnings, errors, and image extraction results.
 """
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +22,7 @@ class AuditLog:
     def __init__(self) -> None:
         self._started_at = datetime.now(tz=timezone.utc).isoformat()
         self._entries: list[dict] = []
+        self._lock = threading.Lock()
 
     # ── Per-document tracking ─────────────────────────────────────────────────
 
@@ -56,7 +58,8 @@ class AuditLog:
             "warnings": warnings or [],
             "error": error,
         }
-        self._entries.append(entry)
+        with self._lock:
+            self._entries.append(entry)
 
     # ── Report generation ─────────────────────────────────────────────────────
 
