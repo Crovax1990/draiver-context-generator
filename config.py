@@ -22,3 +22,7 @@ INCLUDE_FRONTMATTER = True
 
 # Include a Table of Contents in single-mode output
 INCLUDE_TOC = True
+
+# ── Image extraction ──────────────────────────────────────────────────────────
+# Subdirectory inside OUTPUT_DIR where extracted images are saved
+IMAGES_SUBDIR = "images"

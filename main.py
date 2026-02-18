@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import config
+from src.audit import AuditLog
 from src.ingestion import scan_input_folder
 from src.extraction import extract_all
 from src.output_writer import write_output
@@ -60,6 +61,12 @@ def _parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=f"Output folder (default: {config.OUTPUT_DIR})",
     )
+    parser.add_argument(
+        "--no-images",
+        action="store_true",
+        default=False,
+        help="Skip image extraction from documents.",
+    )
     return parser.parse_args()
 
 
@@ -73,6 +80,15 @@ def main() -> int:
     logger.info("Output: %s", args.output)
     logger.info("Mode  : %s", args.mode)
 
+    # Prepare output subdirectories
+    images_dir = None
+    if not args.no_images:
+        images_dir = args.output / config.IMAGES_SUBDIR
+        logger.info("Images: %s", images_dir)
+
+    # Initialize audit log
+    audit = AuditLog()
+
     # ── Step 1: Ingestion ─────────────────────────────────────────────────────
     try:
         file_paths = scan_input_folder(args.input)
@@ -85,27 +101,51 @@ def main() -> int:
         return 0
 
     # ── Step 2: Extraction ────────────────────────────────────────────────────
-    docs, failed = extract_all(file_paths)
-
-    if not docs:
-        logger.error("All documents failed to process. Check the logs above.")
-        return 1
+    docs, failed = extract_all(file_paths, audit=audit, images_dir=images_dir)
 
     # ── Step 3: Output ────────────────────────────────────────────────────────
-    written = write_output(docs, args.output, mode=args.mode)
+    if docs:
+        written = write_output(docs, args.output, mode=args.mode)
+    else:
+        written = []
+        logger.error("All documents failed to process. Check the logs above.")
+
+    # ── Step 4: Audit report ──────────────────────────────────────────────────
+    report_path = audit.write_report(args.output)
 
     # ── Summary ───────────────────────────────────────────────────────────────
+    _print_summary(docs, failed, written, report_path, images_dir)
+
+    return 0 if docs else 1
+
+
+def _print_summary(
+    docs: list[dict],
+    failed: list[str],
+    written: list[Path],
+    report_path: Path,
+    images_dir: Path | None,
+) -> None:
+    """Prints a final human-readable summary to stdout."""
+    total_images = sum(d.get("images_extracted", 0) for d in docs)
+    total_warnings = sum(len(d.get("warnings", [])) for d in docs)
+
     print()
-    print("=" * 50)
-    print(f"  Documents processed : {len(docs)}")
+    print("=" * 56)
+    print(f"  Documents processed  : {len(docs)}")
     if failed:
-        print(f"  Documents failed    : {len(failed)} → {failed}")
-    print(f"  Output files written: {len(written)}")
+        print(f"  Documents FAILED     : {len(failed)} → {failed}")
+    if total_warnings:
+        print(f"  Total warnings       : {total_warnings}")
+    print(f"  Images extracted     : {total_images}")
+    print(f"  Output files written : {len(written)}")
     for path in written:
         print(f"    → {path}")
-    print("=" * 50)
-
-    return 0
+    print(f"  Audit report         : {report_path}")
+    if images_dir and images_dir.exists():
+        img_count = len(list(images_dir.glob("*.png")))
+        print(f"  Images dir           : {images_dir} ({img_count} files)")
+    print("=" * 56)
 
 
 if __name__ == "__main__":
