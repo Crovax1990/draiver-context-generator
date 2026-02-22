@@ -1,6 +1,7 @@
 """
 Draiver Context Generator – Central Configuration
 """
+import os
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -29,3 +30,23 @@ INCLUDE_TOC = True
 # ── Image extraction ──────────────────────────────────────────────────────────
 # Subdirectory inside OUTPUT_DIR where extracted images are saved
 IMAGES_SUBDIR = "images"
+
+# ── PPTX Generation ──────────────────────────────────────────────────────────
+# Google API key (from environment variable)
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+
+# LLM model for content generation
+LLM_MODEL = "gemini-2.0-flash"
+LLM_TEMPERATURE = 0.0
+
+# Path to the PowerPoint template
+TEMPLATE_PATH = BASE_DIR / "template.pptx"
+
+# Directory for generated PPTX output
+PPTX_OUTPUT_DIR = BASE_DIR / "output_pptx"
+
+# RAG settings
+RAG_CHUNK_SIZE = 1000
+RAG_CHUNK_OVERLAP = 200
+RAG_RETRIEVAL_K = 5
+EMBEDDING_MODEL = "models/gemini-embedding-001"
