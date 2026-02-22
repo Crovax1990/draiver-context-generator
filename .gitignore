@@ -36,6 +36,7 @@ Thumbs.db
 input/
 output/
 *.pptx
+!template.pptx
 *.log
 *.cache
 
