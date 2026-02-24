@@ -16,6 +16,7 @@ from src.lesson_parser import parse_piano_didattico
 from src.rag_engine import build_vectorstore, generate_slide_content
 from src.image_matcher import match_images
 from src.pptx_renderer import PPTXRenderer
+from src.utils import sanitize_filename
 
 def _setup_logging():
     logging.basicConfig(
@@ -32,16 +33,13 @@ def main():
     parser.add_argument("--context", type=Path, default=config.OUTPUT_DIR / "context.md", help="Path al file context.md")
     parser.add_argument("--plan", type=Path, default=config.OUTPUT_DIR / "piano_didattico.md", help="Path al file piano_didattico.md")
     parser.add_argument("--output", type=Path, default=config.PPTX_OUTPUT_DIR, help="Directory di output per i PPTX")
-    parser.add_argument("--api-key", type=str, default=config.GOOGLE_API_KEY, help="Google API Key")
+    parser.add_argument("--api-key", type=str, default=config.GOOGLE_API_KEY, help="Google API Key (opzionale se si usa Ollama)")
     
     args = parser.parse_args()
     
-    if not args.api_key:
-        logger.error("ERRORE: Google API Key non trovata. Imposta GOOGLE_API_KEY nell'ambiente o usa --api-key.")
-        sys.exit(1)
-    
-    # Update config with provided API key
-    config.GOOGLE_API_KEY = args.api_key
+    # Update config with provided API key (if any)
+    if args.api_key:
+        config.GOOGLE_API_KEY = args.api_key
     
     logger.info("=== Inizio Generazione Presentazioni RAG ===")
     
@@ -104,7 +102,8 @@ def main():
             lesson_renderer.add_final_slide("Esercizi Pratici", lezione.esercizi)
         
         # Salvataggio lezione individuale
-        lesson_filename = args.output / f"Lezione_{lezione.numero}_{lezione.titolo.replace(' ', '_')}.pptx"
+        safe_title = sanitize_filename(lezione.titolo.replace(' ', '_'))
+        lesson_filename = args.output / f"Lezione_{lezione.numero}_{safe_title}.pptx"
         lesson_renderer.save(lesson_filename)
         
     # 5. Salvataggio Master Deck

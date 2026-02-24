@@ -1,4 +1,5 @@
 import sys
+import logging
 from pathlib import Path
 
 # Add project root and src to path
@@ -7,9 +8,13 @@ sys.path.insert(0, str(project_root))
 
 try:
     import config
+    from src.utils import gemini_retry
 except ImportError:
-    print("❌ Error: Could not import config.py. Make sure you are running the test from the project root.")
+    print("❌ Error: Could not import config.py or src.utils. Make sure you are running the test from the project root.")
     sys.exit(1)
+
+# Configure logging to see retry warnings
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s – %(message)s')
 
 def verify_imports():
     print("--- Verifying Imports ---")
@@ -22,6 +27,7 @@ def verify_imports():
         print("Please run: pip install langchain-google-genai")
         return False
 
+@gemini_retry(max_attempts=3)
 def verify_config_setup():
     print(f"\n--- Verifying Gemini Setup (from config.py) ---")
     
@@ -30,9 +36,10 @@ def verify_config_setup():
         print("❌ GOOGLE_API_KEY is not set in config.py or environment.")
         return False
     
-    from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_ollama import OllamaEmbeddings
     
-    # 1. Test LLM
+    # 1. Test LLM (Still Gemini)
     model_name = config.LLM_MODEL
     print(f"Testing LLM model: {model_name}...")
     llm_ok = False
@@ -44,17 +51,20 @@ def verify_config_setup():
     except Exception as e:
         print(f"❌ LLM verification failed for {model_name}: {e}")
     
-    # 2. Test Embeddings
-    embedding_model = config.EMBEDDING_MODEL
-    print(f"\nVerifying Embeddings model: {embedding_model}...")
+    # 2. Test Embeddings (Now Ollama)
+    print(f"\nVerifying Ollama Embeddings model: {config.OLLAMA_EMBEDDING_MODEL}...")
     emb_ok = False
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model, google_api_key=api_key)
+        embeddings = OllamaEmbeddings(
+            model=config.OLLAMA_EMBEDDING_MODEL, 
+            base_url=config.OLLAMA_BASE_URL
+        )
         vector = embeddings.embed_query("Hi")
-        print(f"✅ Embeddings verified! Vector size: {len(vector)}")
+        print(f"✅ Ollama Embeddings verified! Vector size: {len(vector)}")
         emb_ok = True
     except Exception as e:
-        print(f"❌ Embeddings verification failed for {embedding_model}: {e}")
+        print(f"❌ Ollama Embeddings verification failed: {e}")
+        print("💡 Make sure Ollama is running and the model is pulled: ollama pull qwen3-embedding")
 
     return llm_ok and emb_ok
 

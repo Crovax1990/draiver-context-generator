@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import List
 
 from pydantic import BaseModel, Field
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
 import config
+from src.utils import gemini_retry
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class LessonPlan(BaseModel):
     """Intero piano didattico composto da più lezioni."""
     lezioni: List[LezioneSpec] = Field(description="Elenco delle lezioni estratte dal piano")
 
+@gemini_retry(max_attempts=5)
 def parse_piano_didattico(path: Path) -> List[LezioneSpec]:
     """
     Parses the markdown lesson plan using an LLM with structured output.
@@ -45,27 +47,26 @@ def parse_piano_didattico(path: Path) -> List[LezioneSpec]:
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    llm = ChatGoogleGenerativeAI(
-        model=config.LLM_MODEL,
+    llm = ChatOllama(
+        model=config.OLLAMA_LLM_MODEL,
+        base_url=config.OLLAMA_BASE_URL,
         temperature=0,
-        google_api_key=config.GOOGLE_API_KEY
+        format="json"
     )
 
-    parser = PydanticOutputParser(pydantic_object=LessonPlan)
+    structured_llm = llm.with_structured_output(LessonPlan)
 
     prompt = ChatPromptTemplate.from_template(
         "Analizza il seguente piano didattico in formato Markdown ed estrai la struttura "
         "delle lezioni (titolo, obiettivi, scaletta argomenti, esercizi, materiali). "
         "Il piano contiene solitamente 5 lezioni principali.\n\n"
-        "{format_instructions}\n\n"
         "PIANO DIDATTICO:\n{content}"
     )
 
-    prompt_and_model = prompt | llm | parser
+    chain = prompt | structured_llm
 
-    output = prompt_and_model.invoke({
-        "content": content,
-        "format_instructions": parser.get_format_instructions()
+    output = chain.invoke({
+        "content": content
     })
 
     logger.info("Successfully parsed %d lessons", len(output.lezioni))

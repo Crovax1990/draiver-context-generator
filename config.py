@@ -36,7 +36,8 @@ IMAGES_SUBDIR = "images"
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 # LLM model for content generation
-LLM_MODEL = "gemini-2.0-flash"
+# LLM_MODEL = "gemini-2.5-flash-lite" # Previous Gemini model
+OLLAMA_LLM_MODEL = "gpt-oss:20b"
 LLM_TEMPERATURE = 0.0
 
 # Path to the PowerPoint template
@@ -49,4 +50,8 @@ PPTX_OUTPUT_DIR = BASE_DIR / "output_pptx"
 RAG_CHUNK_SIZE = 1000
 RAG_CHUNK_OVERLAP = 200
 RAG_RETRIEVAL_K = 5
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+# EMBEDDING_MODEL = "models/gemini-embedding-001" # Previous Gemini model
+
+# Ollama settings for local embeddings
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_EMBEDDING_MODEL = "qwen3-embedding:latest"

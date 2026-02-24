@@ -4,6 +4,7 @@ Handles indexing of context.md and generation of slide content.
 """
 import logging
 import re
+from operator import itemgetter
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,11 +12,12 @@ from pydantic import BaseModel, Field
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
 import config
+from src.utils import gemini_retry
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class SlideContent(BaseModel):
         description="Nomi dei documenti sorgente utilizzati (es. dal contesto RAG)"
     )
 
+@gemini_retry(max_attempts=5)
 def build_vectorstore(context_path: Path) -> FAISS:
     """
     Loads context.md, splits into chunks with source metadata, and builds a FAISS index.
@@ -64,15 +67,16 @@ def build_vectorstore(context_path: Path) -> FAISS:
         
         chunk.metadata["source_doc_name"] = current_source
         
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model=config.EMBEDDING_MODEL,
-        google_api_key=config.GOOGLE_API_KEY
+    embeddings = OllamaEmbeddings(
+        model=config.OLLAMA_EMBEDDING_MODEL,
+        base_url=config.OLLAMA_BASE_URL
     )
     
     vectorstore = FAISS.from_documents(chunks, embeddings)
     logger.info("Vector store built with %d chunks", len(chunks))
     return vectorstore
 
+@gemini_retry(max_attempts=5)
 def generate_slide_content(
     retriever, 
     topic: str, 
@@ -81,10 +85,11 @@ def generate_slide_content(
     """
     Retrieves context and generates structured slide content via LLM.
     """
-    llm = ChatGoogleGenerativeAI(
-        model=config.LLM_MODEL,
+    llm = ChatOllama(
+        model=config.OLLAMA_LLM_MODEL,
+        base_url=config.OLLAMA_BASE_URL,
         temperature=config.LLM_TEMPERATURE,
-        google_api_key=config.GOOGLE_API_KEY
+        format="json"
     )
     
     structured_llm = llm.with_structured_output(SlideContent)
@@ -117,7 +122,11 @@ Rispondi in formato JSON strutturato.
         ])
 
     chain = (
-        {"context": retriever | format_docs, "topic": RunnablePassthrough(), "lesson_title": RunnablePassthrough()}
+        {
+            "context": itemgetter("topic") | retriever | format_docs, 
+            "topic": itemgetter("topic"), 
+            "lesson_title": itemgetter("lesson_title")
+        }
         | prompt
         | structured_llm
     )
